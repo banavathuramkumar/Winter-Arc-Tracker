@@ -66,15 +66,21 @@ app.get('/', (req, res, next) => {
   });
 });
 
-// Mount Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/habits', habitRoutes);
-app.use('/api/habit-logs', habitLogRoutes);
-app.use('/api/sleep', sleepRoutes);
-app.use('/api/goals', goalRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/insights', insightsRoutes);
-app.use('/api/notifications', notificationRoutes);
+// Helper to mount routes with and without /api prefix
+const mountAppRoutes = (prefix = '') => {
+  app.use(`${prefix}/auth`, authRoutes);
+  app.use(`${prefix}/habits`, habitRoutes);
+  app.use(`${prefix}/habit-logs`, habitLogRoutes);
+  app.use(`${prefix}/sleep`, sleepRoutes);
+  app.use(`${prefix}/goals`, goalRoutes);
+  app.use(`${prefix}/dashboard`, dashboardRoutes);
+  app.use(`${prefix}/insights`, insightsRoutes);
+  app.use(`${prefix}/notifications`, notificationRoutes);
+};
+
+// Mount both for universal compatibility
+mountAppRoutes('/api');
+mountAppRoutes('');
 
 // Production Static Serving (Full-stack Monolith or fallback)
 if (process.env.NODE_ENV === 'production') {
