@@ -41,7 +41,7 @@ export const register = async (req, res, next) => {
       email: email.toLowerCase().trim(),
       password,
       timezone: timezone || 'UTC',
-      onboarded: true,
+      onboarded: false,
     });
 
     // Create 3 starter habits for instant dashboard engagement

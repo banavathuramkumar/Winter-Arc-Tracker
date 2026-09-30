@@ -57,7 +57,7 @@ export const OnboardingPage = () => {
         },
       });
 
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error('Onboarding failed:', err);
     } finally {

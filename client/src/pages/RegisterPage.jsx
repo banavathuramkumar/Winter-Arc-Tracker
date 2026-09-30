@@ -41,7 +41,7 @@ export const RegisterPage = () => {
       setLoading(false);
 
       if (result && result.success) {
-        window.location.href = '/dashboard';
+        window.location.href = '/onboarding';
       } else {
         setFormError(result?.message || 'Registration failed. Please try again.');
       }

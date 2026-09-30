@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSkeleton } from './LoadingSkeleton';
 
-export const ProtectedRoute = ({ children }) => {
+export const ProtectedRoute = ({ children, requireOnboarding = true }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -17,6 +17,11 @@ export const ProtectedRoute = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Guide new users through onboarding initiation first
+  if (requireOnboarding && user.onboarded === false && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return children;

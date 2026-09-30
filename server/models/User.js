@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema(
     },
     onboarded: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     themePreference: {
       type: String,
