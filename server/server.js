@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
@@ -17,6 +19,9 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import insightsRoutes from './routes/insightsRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Connect to MongoDB
 connectDB();
 
@@ -27,7 +32,7 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: process.env.CLIENT_URL || '*',
     credentials: true,
   })
 );
@@ -48,6 +53,17 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Root entry point check
+app.get('/', (req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    return next();
+  }
+  res.status(200).json({
+    status: 'online',
+    message: 'Winter Arc Tracker API is running',
+  });
+});
+
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/habits', habitRoutes);
@@ -58,17 +74,26 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Serve Frontend in Production (Single-service deployment on Render/Railway)
-import path from 'path';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// Production Static Serving (Full-stack Monolith or fallback)
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  app.get('*', (req, res, next) => {
-    if (req.url.startsWith('/api')) return next();
-    res.sendFile(path.resolve(__dirname, '../client', 'dist', 'index.html'));
+  const clientDistPath = path.resolve(__dirname, '../client/dist');
+  app.use(express.static(clientDistPath));
+
+  // Catch-all handler for SPA in Express 5
+  app.use((req, res, next) => {
+    if (req.originalUrl.startsWith('/api')) {
+      return res.status(404).json({ success: false, message: `API route not found: ${req.originalUrl}` });
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+      if (err) {
+        // If client/dist is not deployed on the same server, return API alive message
+        res.status(200).json({
+          status: 'online',
+          app: 'Winter Arc Tracker API',
+          message: 'Backend API service is running. Connect frontend to /api endpoints.',
+        });
+      }
+    });
   });
 } else {
   // 404 Route Handler in development
