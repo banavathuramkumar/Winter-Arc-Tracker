@@ -58,10 +58,24 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// 404 Route Handler
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
-});
+// Serve Frontend in Production (Single-service deployment on Render/Railway)
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+  app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api')) return next();
+    res.sendFile(path.resolve(__dirname, '../client', 'dist', 'index.html'));
+  });
+} else {
+  // 404 Route Handler in development
+  app.use((req, res) => {
+    res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
+  });
+}
 
 // Centralized Error Handling Middleware
 app.use(errorHandler);
