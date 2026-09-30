@@ -44,15 +44,18 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const res = await api.post('/auth/login', { email, password });
-      if (res.data.success) {
+      if (res?.data?.success) {
         localStorage.setItem('winter_arc_token', res.data.token);
         localStorage.setItem('winter_arc_user', JSON.stringify(res.data.user));
         setToken(res.data.token);
         setUser(res.data.user);
         return { success: true, user: res.data.user };
       }
+      const msg = res?.data?.message || 'Login failed. Please check credentials.';
+      setError(msg);
+      return { success: false, message: msg };
     } catch (err) {
-      const msg = err.response?.data?.message || 'Login failed. Please check credentials.';
+      const msg = err.response?.data?.message || err.message || 'Login failed. Please check credentials.';
       setError(msg);
       return { success: false, message: msg };
     }
@@ -70,15 +73,18 @@ export const AuthProvider = ({ children }) => {
         timezone: detectedTz,
       });
 
-      if (res.data.success) {
+      if (res?.data?.success) {
         localStorage.setItem('winter_arc_token', res.data.token);
         localStorage.setItem('winter_arc_user', JSON.stringify(res.data.user));
         setToken(res.data.token);
         setUser(res.data.user);
         return { success: true, user: res.data.user };
       }
+      const msg = res?.data?.message || 'Registration failed. Please try again.';
+      setError(msg);
+      return { success: false, message: msg };
     } catch (err) {
-      const msg = err.response?.data?.message || 'Registration failed. Please try again.';
+      const msg = err.response?.data?.message || err.message || 'Registration failed. Please try again.';
       setError(msg);
       return { success: false, message: msg };
     }
