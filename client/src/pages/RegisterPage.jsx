@@ -35,13 +35,20 @@ export const RegisterPage = () => {
     }
 
     setLoading(true);
-    const result = await register(name, email, password);
-    setLoading(false);
+    try {
+      const result = await register(name, email, password);
+      console.log('[Register] Result:', result);
+      setLoading(false);
 
-    if (result.success) {
-      window.location.href = '/dashboard';
-    } else {
-      setFormError(result.message);
+      if (result && result.success) {
+        window.location.href = '/dashboard';
+      } else {
+        setFormError(result?.message || 'Registration failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('[Register] Error:', err);
+      setLoading(false);
+      setFormError(err.message || 'An unexpected error occurred.');
     }
   };
 
