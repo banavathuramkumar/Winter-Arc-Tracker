@@ -39,7 +39,7 @@ export const RegisterPage = () => {
     setLoading(false);
 
     if (result.success) {
-      navigate('/onboarding');
+      navigate('/dashboard');
     } else {
       setFormError(result.message);
     }
