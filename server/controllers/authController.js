@@ -44,17 +44,6 @@ export const register = async (req, res, next) => {
       onboarded: false,
     });
 
-    // Create 3 starter habits for instant dashboard engagement
-    try {
-      await Habit.insertMany([
-        { userId: user._id, name: 'Deep Work & Coding', icon: '💻', category: 'Coding', order: 0 },
-        { userId: user._id, name: 'Daily Workout & Gym', icon: '🏃', category: 'Fitness', order: 1 },
-        { userId: user._id, name: 'Reading & Mindset', icon: '📖', category: 'Reading', order: 2 },
-      ]);
-    } catch (habitErr) {
-      console.error('Failed to seed default habits:', habitErr.message);
-    }
-
     const token = generateToken(user._id);
 
     res.status(201).json({
