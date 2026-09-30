@@ -7,6 +7,8 @@ node_modules/
 *.env
 server/.env
 client/.env
+!client/.env.production
+!client/.env.example
 
 # Local DB / Data
 data/
