@@ -30,11 +30,7 @@ export const LoginPage = () => {
     setLoading(false);
 
     if (result.success) {
-      if (!result.user.onboarded) {
-        navigate('/onboarding');
-      } else {
-        navigate(from, { replace: true });
-      }
+      window.location.href = '/dashboard';
     } else {
       setFormError(result.message);
     }
