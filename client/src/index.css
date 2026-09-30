@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #f8fafc;
+    --card-primary: #ffffff;
+    --border-primary: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --accent-sky: #0ea5e9;
+  }
+
+  .dark {
+    --bg-primary: #080c14;
+    --card-primary: #101726;
+    --border-primary: #1e293b;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --accent-sky: #38bdf8;
+  }
+
+  body {
+    @apply bg-[#f8fafc] text-slate-900 dark:bg-[#080c14] dark:text-slate-100 transition-colors duration-200 antialiased selection:bg-sky-500/20 selection:text-sky-600 dark:selection:text-sky-300;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-600;
+}
+
+/* Snowflake pulse animation */
+@keyframes frostGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px -3px rgba(56, 189, 248, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px 2px rgba(56, 189, 248, 0.4);
+  }
+}
+
+.animate-frost-glow {
+  animation: frostGlow 3s ease-in-out infinite;
+}

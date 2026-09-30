@@ -1,0 +1,24 @@
+{
+  "name": "winter-arc-server",
+  "version": "1.0.0",
+  "description": "Backend API for Winter Arc Tracker",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seedDemo.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.3",
+    "node-cron": "^4.6.0",
+    "resend": "^6.31.0"
+  }
+}
