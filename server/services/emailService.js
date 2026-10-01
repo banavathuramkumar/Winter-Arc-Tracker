@@ -14,10 +14,10 @@ const getGmailTransporter = () => {
         user,
         pass,
       },
-      family: 4, // Force IPv4 to eliminate IPv6 ENETUNREACH errors on cloud hosts
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 20000,
+      family: 4,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
       tls: {
         rejectUnauthorized: false,
       },
@@ -36,34 +36,48 @@ const getResendClient = () => {
 };
 
 /**
- * Universal dispatcher that automatically chooses Gmail SMTP or Resend
+ * Universal dispatcher that automatically chooses the best available provider
+ * 1. Brevo HTTPS API (Port 443 - Sends to ANY email, no domain needed, never blocked by Render)
+ * 2. Resend HTTPS API (Port 443)
+ * 3. Gmail SMTP (Direct mail transport)
  */
 const dispatchEmail = async ({ to, subject, html }) => {
-  const gmailTransporter = getGmailTransporter();
-  const resendClient = getResendClient();
-
-  // 1. Try Gmail SMTP first (no custom domain needed, sends to ANY user for free)
-  if (gmailTransporter) {
+  // 1. Check Brevo HTTP API (Port 443 - Ideal for Render with 0 domain requirement)
+  if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim()) {
     try {
-      const gmailUser = (process.env.GMAIL_USER || process.env.SMTP_USER).trim();
-      const fromAddress = `"Winter Arc" <${gmailUser}>`;
-      
-      const info = await gmailTransporter.sendMail({
-        from: fromAddress,
-        to,
-        subject,
-        html,
+      const apiKey = process.env.BREVO_API_KEY.trim();
+      const senderEmail = (process.env.GMAIL_USER || 'banavathuramkumar@gmail.com').trim();
+
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'Winter Arc', email: senderEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
       });
 
-      console.log(`[Email via Gmail SMTP] Delivered to ${to} (MessageId: ${info.messageId})`);
-      return { success: true, sentLive: true, provider: 'gmail', messageId: info.messageId };
+      const data = await res.json();
+      if (res.ok && data.messageId) {
+        console.log(`[Email via Brevo API] Delivered to ${to} (ID: ${data.messageId})`);
+        return { success: true, sentLive: true, provider: 'brevo', messageId: data.messageId };
+      }
+
+      console.error(`[Brevo API Error]:`, data);
+      return { success: false, sentLive: false, provider: 'brevo', error: data.message || JSON.stringify(data) };
     } catch (error) {
-      console.error(`[Gmail SMTP Error] Failed delivering to ${to}:`, error.message);
-      return { success: false, sentLive: false, provider: 'gmail', error: error.message };
+      console.error(`[Brevo API Error]:`, error.message);
     }
   }
 
-  // 2. Fallback to Resend API
+  // 2. Check Resend API (Port 443)
+  const resendClient = getResendClient();
   if (resendClient) {
     try {
       const response = await resendClient.emails.send({
@@ -87,11 +101,32 @@ const dispatchEmail = async ({ to, subject, html }) => {
       return { success: true, sentLive: true, provider: 'resend', id: response.data?.id };
     } catch (error) {
       console.error(`[Resend Error] Failed delivering to ${to}:`, error.message);
-      return { success: false, sentLive: false, provider: 'resend', error: error.message };
     }
   }
 
-  // 3. Fallback: Mock / Development Mode
+  // 3. Fallback to Gmail SMTP
+  const gmailTransporter = getGmailTransporter();
+  if (gmailTransporter) {
+    try {
+      const gmailUser = (process.env.GMAIL_USER || process.env.SMTP_USER).trim();
+      const fromAddress = `"Winter Arc" <${gmailUser}>`;
+      
+      const info = await gmailTransporter.sendMail({
+        from: fromAddress,
+        to,
+        subject,
+        html,
+      });
+
+      console.log(`[Email via Gmail SMTP] Delivered to ${to} (MessageId: ${info.messageId})`);
+      return { success: true, sentLive: true, provider: 'gmail', messageId: info.messageId };
+    } catch (error) {
+      console.error(`[Gmail SMTP Error] Failed delivering to ${to}:`, error.message);
+      return { success: false, sentLive: false, provider: 'gmail', error: error.message };
+    }
+  }
+
+  // 4. Fallback: Mock / Development Mode
   console.log(`[Email Mock] ${subject} generated for ${to}`);
   return { success: true, sentLive: false, provider: 'mock' };
 };
