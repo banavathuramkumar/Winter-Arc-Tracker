@@ -7,7 +7,9 @@ const getGmailTransporter = () => {
   const pass = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '').trim().replace(/\s+/g, '');
   if (user && pass) {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
         user,
         pass,
@@ -37,7 +39,7 @@ const dispatchEmail = async ({ to, subject, html }) => {
   if (gmailTransporter) {
     try {
       const gmailUser = (process.env.GMAIL_USER || process.env.SMTP_USER).trim();
-      const fromAddress = process.env.EMAIL_FROM || `Winter Arc <${gmailUser}>`;
+      const fromAddress = `"Winter Arc" <${gmailUser}>`;
       
       const info = await gmailTransporter.sendMail({
         from: fromAddress,
