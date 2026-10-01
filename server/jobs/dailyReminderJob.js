@@ -84,12 +84,13 @@ export const runDailyReminderCheck = async () => {
         });
 
         if (emailResult.sentLive) {
-          console.log(`[Cron Success] Daily reminder successfully delivered to ${user.email}`);
+          console.log(`[Cron Success] Daily reminder successfully delivered to ${user.email} via ${emailResult.provider}`);
+          // Only mark as sent today if email was actually delivered — prevents blocking retries on failures
+          user.lastReminderSentDate = todayStr;
+          await user.save();
+        } else {
+          console.warn(`[Cron Warning] Email to ${user.email} was NOT delivered live (provider: ${emailResult.provider}, error: ${emailResult.error || 'mock mode'}). Will retry next minute.`);
         }
-
-        // Mark as sent for today
-        user.lastReminderSentDate = todayStr;
-        await user.save();
       }
     }
   } catch (error) {
