@@ -6,8 +6,8 @@ import { calculateUserStreaks, getLocalDateString } from '../services/streakServ
 import { sendDailyReminder } from '../services/emailService.js';
 
 /**
- * Checks all users to see if their local time matches their configured daily reminder time.
- * If so, inspects their habits & sleep progress and dispatches a smart reminder.
+ * Checks all users to see if their local time has reached or passed their configured daily reminder time.
+ * If so, inspects their habits & sleep progress and dispatches a smart reminder once per day.
  */
 export const runDailyReminderCheck = async () => {
   try {
@@ -17,28 +17,44 @@ export const runDailyReminderCheck = async () => {
     });
 
     for (const user of users) {
-      const userTz = user.timezone || 'UTC';
-      const targetTimeStr = user.notificationSettings.reminderTime || '21:00';
-      const [targetHour, targetMin] = targetTimeStr.split(':').map(Number);
+      let userTz = user.timezone || 'UTC';
+      // Normalize timezone aliases
+      if (userTz === 'Asia/Calcutta') userTz = 'Asia/Kolkata';
 
-      // Get current hour and min in user's timezone
+      const targetTimeStr = user.notificationSettings?.reminderTime || '21:00';
+      const [targetHour, targetMin] = targetTimeStr.split(':').map(Number);
+      const targetTotalMinutes = targetHour * 60 + targetMin;
+
       const now = new Date();
-      const userTimeString = now.toLocaleTimeString('en-US', {
-        timeZone: userTz,
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      let userTimeString = '00:00';
+      try {
+        const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+          timeZone: userTz,
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        });
+        userTimeString = timeFormatter.format(now);
+      } catch (e) {
+        userTimeString = now.toISOString().substring(11, 16);
+      }
+
       const [currentHour, currentMin] = userTimeString.split(':').map(Number);
+      const currentTotalMinutes = currentHour * 60 + currentMin;
       const todayStr = getLocalDateString(now, userTz);
 
-      // Check if current hour and minute match target time, and not sent yet today
-      if (currentHour === targetHour && currentMin === targetMin) {
+      // Trigger if current time has reached or passed target time (within 3-hour evening window)
+      // and user has NOT received today's reminder yet
+      const isWithinWindow =
+        currentTotalMinutes >= targetTotalMinutes &&
+        currentTotalMinutes <= targetTotalMinutes + 180;
+
+      if (isWithinWindow) {
         if (user.lastReminderSentDate === todayStr) {
           continue; // Already dispatched today
         }
 
-        console.log(`[Cron Match] Triggering automated daily reminder for ${user.email} (${userTimeString} in ${userTz})`);
+        console.log(`[Cron Dispatch] Sending daily reminder to ${user.email} (Local time: ${userTimeString} ${userTz}, Target: ${targetTimeStr})`);
 
         // Fetch active habits
         const activeHabits = await Habit.find({ userId: user._id, active: true, archived: false });
@@ -59,13 +75,17 @@ export const runDailyReminderCheck = async () => {
 
         const streaks = await calculateUserStreaks(user._id, userTz);
 
-        await sendDailyReminder({
+        const emailResult = await sendDailyReminder({
           user,
           completedCount: habitLogs.length,
           totalActive: activeHabits.length,
           sleepLogged: !!sleepLog,
           streak: streaks.currentStreak,
         });
+
+        if (emailResult.sentLive) {
+          console.log(`[Cron Success] Daily reminder successfully delivered to ${user.email}`);
+        }
 
         // Mark as sent for today
         user.lastReminderSentDate = todayStr;
