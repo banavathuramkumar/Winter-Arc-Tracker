@@ -9,8 +9,8 @@ import { runMonthlySummaryCheck } from './monthlySummaryJob.js';
 export const initCronJobs = () => {
   console.log('[Cron] Initializing scheduled background jobs...');
 
-  // Run daily check every 30 minutes to capture user-specific reminder hours
-  cron.schedule('*/30 * * * *', async () => {
+  // Run daily check every minute to trigger reminders at the exact user-configured minute
+  cron.schedule('* * * * *', async () => {
     await runDailyReminderCheck();
   });
 

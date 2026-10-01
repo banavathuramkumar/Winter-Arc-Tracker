@@ -65,6 +65,10 @@ const userSchema = new mongoose.Schema(
         default: true,
       },
     },
+    lastReminderSentDate: {
+      type: String,
+      default: null,
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },

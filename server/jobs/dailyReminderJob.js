@@ -30,14 +30,18 @@ export const runDailyReminderCheck = async () => {
         minute: '2-digit',
       });
       const [currentHour, currentMin] = userTimeString.split(':').map(Number);
+      const todayStr = getLocalDateString(now, userTz);
 
-      // Check if current hour matches target hour (within reasonable 30-min window check)
-      if (currentHour === targetHour && Math.abs(currentMin - targetMin) < 30) {
-        const todayStr = getLocalDateString(now, userTz);
+      // Check if current hour and minute match target time, and not sent yet today
+      if (currentHour === targetHour && currentMin === targetMin) {
+        if (user.lastReminderSentDate === todayStr) {
+          continue; // Already dispatched today
+        }
+
+        console.log(`[Cron Match] Triggering automated daily reminder for ${user.email} (${userTimeString} in ${userTz})`);
 
         // Fetch active habits
         const activeHabits = await Habit.find({ userId: user._id, active: true, archived: false });
-        if (activeHabits.length === 0) continue;
 
         // Fetch today's completed habit logs
         const habitLogs = await HabitLog.find({
@@ -62,6 +66,10 @@ export const runDailyReminderCheck = async () => {
           sleepLogged: !!sleepLog,
           streak: streaks.currentStreak,
         });
+
+        // Mark as sent for today
+        user.lastReminderSentDate = todayStr;
+        await user.save();
       }
     }
   } catch (error) {
