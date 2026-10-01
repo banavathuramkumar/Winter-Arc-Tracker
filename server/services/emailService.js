@@ -1,11 +1,90 @@
+import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 
+// Helper to get Nodemailer Gmail Transporter
+const getGmailTransporter = () => {
+  const user = (process.env.GMAIL_USER || process.env.SMTP_USER || '').trim();
+  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '').trim().replace(/\s+/g, '');
+  if (user && pass) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
+  }
+  return null;
+};
+
+// Helper to get Resend Client
 const getResendClient = () => {
   const apiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : '';
   if (apiKey && apiKey.length > 5) {
     return new Resend(apiKey);
   }
   return null;
+};
+
+/**
+ * Universal dispatcher that automatically chooses Gmail SMTP or Resend
+ */
+const dispatchEmail = async ({ to, subject, html }) => {
+  const gmailTransporter = getGmailTransporter();
+  const resendClient = getResendClient();
+
+  // 1. Try Gmail SMTP first (no custom domain needed, sends to ANY user for free)
+  if (gmailTransporter) {
+    try {
+      const gmailUser = (process.env.GMAIL_USER || process.env.SMTP_USER).trim();
+      const fromAddress = process.env.EMAIL_FROM || `Winter Arc <${gmailUser}>`;
+      
+      const info = await gmailTransporter.sendMail({
+        from: fromAddress,
+        to,
+        subject,
+        html,
+      });
+
+      console.log(`[Email via Gmail SMTP] Delivered to ${to} (MessageId: ${info.messageId})`);
+      return { success: true, sentLive: true, provider: 'gmail', messageId: info.messageId };
+    } catch (error) {
+      console.error(`[Gmail SMTP Error] Failed delivering to ${to}:`, error.message);
+      return { success: false, sentLive: false, provider: 'gmail', error: error.message };
+    }
+  }
+
+  // 2. Fallback to Resend API
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({
+        from: process.env.EMAIL_FROM || 'Winter Arc <onboarding@resend.dev>',
+        to,
+        subject,
+        html,
+      });
+
+      if (response.error) {
+        console.error(`[Resend API Error]:`, response.error);
+        return {
+          success: false,
+          sentLive: false,
+          provider: 'resend',
+          error: response.error.message || JSON.stringify(response.error),
+        };
+      }
+
+      console.log(`[Email via Resend] Delivered to ${to} (ID: ${response.data?.id})`);
+      return { success: true, sentLive: true, provider: 'resend', id: response.data?.id };
+    } catch (error) {
+      console.error(`[Resend Error] Failed delivering to ${to}:`, error.message);
+      return { success: false, sentLive: false, provider: 'resend', error: error.message };
+    }
+  }
+
+  // 3. Fallback: Mock / Development Mode
+  console.log(`[Email Mock] ${subject} generated for ${to}`);
+  return { success: true, sentLive: false, provider: 'mock' };
 };
 
 const getEmailTemplate = (title, contentHtml) => {
@@ -111,10 +190,9 @@ const getEmailTemplate = (title, contentHtml) => {
  * Send smart daily reminder
  */
 export const sendDailyReminder = async ({ user, completedCount, totalActive, sleepLogged, streak }) => {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || 'https://your-winter-arc-tracker.netlify.app';
   const remaining = totalActive - completedCount;
 
-  // Smart check: If all completed and sleep logged, send congratulations instead of reminder
   let messageContent = '';
   let subject = '❄️ Your Winter Arc check-in';
 
@@ -157,65 +235,28 @@ export const sendDailyReminder = async ({ user, completedCount, totalActive, sle
   }
 
   const html = getEmailTemplate('Your Winter Arc Check-in', messageContent);
-  const resendClient = getResendClient();
+  const result = await dispatchEmail({ to: user.email, subject, html });
 
-  try {
-    let sentLive = false;
-    let apiError = null;
-
-    if (resendClient) {
-      const response = await resendClient.emails.send({
-        from: process.env.EMAIL_FROM || 'Winter Arc <onboarding@resend.dev>',
-        to: user.email,
-        subject,
-        html,
-      });
-
-      if (response.error) {
-        console.error(`[Email Error from Resend API]:`, response.error);
-        apiError = response.error.message || JSON.stringify(response.error);
-      } else {
-        sentLive = true;
-        console.log(`[Email] Daily reminder sent successfully via Resend to ${user.email} (ID: ${response.data?.id})`);
-      }
-    } else {
-      console.log(`[Email Mock] Daily reminder generated for ${user.email}: ${remaining} habits remaining, streak ${streak}`);
-    }
-
-    return {
-      success: true,
-      sentLive,
-      error: apiError,
-      preview: {
-        to: user.email,
-        subject,
-        remaining,
-        streak,
-        html,
-      },
-    };
-  } catch (error) {
-    console.error(`[Email Error] Failed sending daily reminder to ${user.email}:`, error.message);
-    return {
-      success: true,
-      sentLive: false,
-      error: error.message,
-      preview: {
-        to: user.email,
-        subject,
-        remaining,
-        streak,
-        html,
-      },
-    };
-  }
+  return {
+    success: true,
+    sentLive: result.sentLive,
+    provider: result.provider,
+    error: result.error,
+    preview: {
+      to: user.email,
+      subject,
+      remaining,
+      streak,
+      html,
+    },
+  };
 };
 
 /**
  * Send weekly summary
  */
 export const sendWeeklySummary = async ({ user, stats }) => {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || 'https://your-winter-arc-tracker.netlify.app';
   const { habitCompletionPct, averageSleepHours, currentStreak, longestStreak, goalsCount, score } = stats;
 
   const messageContent = `
@@ -235,32 +276,14 @@ export const sendWeeklySummary = async ({ user, stats }) => {
   `;
 
   const html = getEmailTemplate('Your Winter Arc — Weekly Review', messageContent);
-  const resendClient = getResendClient();
-
-  try {
-    if (resendClient) {
-      await resendClient.emails.send({
-        from: process.env.EMAIL_FROM || 'Winter Arc <onboarding@resend.dev>',
-        to: user.email,
-        subject: '❄️ Your Winter Arc — Weekly Review',
-        html,
-      });
-      console.log(`[Email] Weekly summary sent to ${user.email}`);
-    } else {
-      console.log(`[Email Mock] Weekly summary would be sent to ${user.email}: score ${score}`);
-    }
-    return { success: true };
-  } catch (error) {
-    console.error(`[Email Error] Failed sending weekly summary to ${user.email}:`, error.message);
-    return { success: false, error: error.message };
-  }
+  return await dispatchEmail({ to: user.email, subject: '❄️ Your Winter Arc — Weekly Review', html });
 };
 
 /**
  * Send monthly summary
  */
 export const sendMonthlySummary = async ({ user, stats }) => {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || 'https://your-winter-arc-tracker.netlify.app';
   const { monthName, score, perfectDaysCount, totalHabitsDone, avgSleep } = stats;
 
   const messageContent = `
@@ -278,25 +301,7 @@ export const sendMonthlySummary = async ({ user, stats }) => {
   `;
 
   const html = getEmailTemplate(`Monthly Summary — ${monthName}`, messageContent);
-  const resendClient = getResendClient();
-
-  try {
-    if (resendClient) {
-      await resendClient.emails.send({
-        from: process.env.EMAIL_FROM || 'Winter Arc <onboarding@resend.dev>',
-        to: user.email,
-        subject: `❄️ Your Winter Arc — ${monthName} Summary`,
-        html,
-      });
-      console.log(`[Email] Monthly summary sent to ${user.email}`);
-    } else {
-      console.log(`[Email Mock] Monthly summary would be sent to ${user.email}`);
-    }
-    return { success: true };
-  } catch (error) {
-    console.error(`[Email Error] Failed sending monthly summary to ${user.email}:`, error.message);
-    return { success: false, error: error.message };
-  }
+  return await dispatchEmail({ to: user.email, subject: `❄️ Your Winter Arc — ${monthName} Summary`, html });
 };
 
 /**
@@ -313,23 +318,5 @@ export const sendPasswordReset = async ({ user, resetUrl }) => {
   `;
 
   const html = getEmailTemplate('Reset Your Password', messageContent);
-  const resendClient = getResendClient();
-
-  try {
-    if (resendClient) {
-      await resendClient.emails.send({
-        from: process.env.EMAIL_FROM || 'Winter Arc <onboarding@resend.dev>',
-        to: user.email,
-        subject: '🔒 Reset your Winter Arc password',
-        html,
-      });
-      console.log(`[Email] Password reset sent to ${user.email}`);
-    } else {
-      console.log(`[Email Mock] Password reset link for ${user.email}: ${resetUrl}`);
-    }
-    return { success: true };
-  } catch (error) {
-    console.error(`[Email Error] Failed sending reset email:`, error.message);
-    return { success: false, error: error.message };
-  }
+  return await dispatchEmail({ to: user.email, subject: '🔒 Reset your Winter Arc password', html });
 };
