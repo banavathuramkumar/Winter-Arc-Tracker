@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import { sendDailyReminder } from '../services/emailService.js';
+import { dispatchTestEmail } from '../services/emailService.js';
 import Habit from '../models/Habit.js';
 import HabitLog from '../models/HabitLog.js';
 import SleepLog from '../models/SleepLog.js';

@@ -21,6 +21,8 @@ import { SleepPage } from './pages/SleepPage';
 import { GoalsPage } from './pages/GoalsPage';
 import { InsightsPage } from './pages/InsightsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminEmailStatsPage } from './pages/AdminEmailStatsPage';
+
 
 function App() {
   return (
@@ -62,6 +64,8 @@ function App() {
             <Route path="/goals" element={<GoalsPage />} />
             <Route path="/insights" element={<InsightsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/admin/email-stats" element={<AdminEmailStatsPage />} />
+
           </Route>
 
           {/* Catch-all redirect */}
