@@ -1,7 +1,5 @@
 import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
-import EmailLog from '../models/EmailLog.js';
-
 
 // Helper to get Nodemailer Gmail Transporter
 const getGmailTransporter = () => {
@@ -38,23 +36,12 @@ const getResendClient = () => {
 };
 
 /**
- * Logs an email dispatch attempt to MongoDB.
- */
-const logEmailAttempt = async ({ userId, recipientEmail, type, subject, provider, sentLive, success, error, messageId }) => {
-  try {
-    await EmailLog.create({ userId: userId || null, recipientEmail, type, subject, provider, sentLive, success, error: error || null, messageId: messageId || null });
-  } catch (e) {
-    console.error('[EmailLog] Failed to write log:', e.message);
-  }
-};
-
-/**
  * Universal dispatcher that automatically chooses the best available provider
  * 1. Brevo HTTPS API (Port 443 - Sends to ANY email, no domain needed, never blocked by Render)
  * 2. Resend HTTPS API (Port 443)
  * 3. Gmail SMTP (Direct mail transport)
  */
-const dispatchEmail = async ({ to, subject, html, userId, emailType = 'daily_reminder' }) => {
+const dispatchEmail = async ({ to, subject, html }) => {
   // 1. Check Brevo HTTP API (Port 443 - Ideal for Render with 0 domain requirement)
   if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim()) {
     try {
@@ -79,18 +66,13 @@ const dispatchEmail = async ({ to, subject, html, userId, emailType = 'daily_rem
       const data = await res.json();
       if (res.ok && data.messageId) {
         console.log(`[Email via Brevo API] Delivered to ${to} (ID: ${data.messageId})`);
-        const result = { success: true, sentLive: true, provider: 'brevo', messageId: data.messageId };
-        await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-        return result;
+        return { success: true, sentLive: true, provider: 'brevo', messageId: data.messageId };
       }
 
       console.error(`[Brevo API Error]:`, data);
-      const result = { success: false, sentLive: false, provider: 'brevo', error: data.message || JSON.stringify(data) };
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-      return result;
+      return { success: false, sentLive: false, provider: 'brevo', error: data.message || JSON.stringify(data) };
     } catch (error) {
       console.error(`[Brevo API Error]:`, error.message);
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, provider: 'brevo', sentLive: false, success: false, error: error.message });
     }
   }
 
@@ -107,23 +89,18 @@ const dispatchEmail = async ({ to, subject, html, userId, emailType = 'daily_rem
 
       if (response.error) {
         console.error(`[Resend API Error]:`, response.error);
-        const result = {
+        return {
           success: false,
           sentLive: false,
           provider: 'resend',
           error: response.error.message || JSON.stringify(response.error),
         };
-        await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-        return result;
       }
 
       console.log(`[Email via Resend] Delivered to ${to} (ID: ${response.data?.id})`);
-      const result = { success: true, sentLive: true, provider: 'resend', messageId: response.data?.id };
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-      return result;
+      return { success: true, sentLive: true, provider: 'resend', id: response.data?.id };
     } catch (error) {
       console.error(`[Resend Error] Failed delivering to ${to}:`, error.message);
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, provider: 'resend', sentLive: false, success: false, error: error.message });
     }
   }
 
@@ -142,20 +119,15 @@ const dispatchEmail = async ({ to, subject, html, userId, emailType = 'daily_rem
       });
 
       console.log(`[Email via Gmail SMTP] Delivered to ${to} (MessageId: ${info.messageId})`);
-      const result = { success: true, sentLive: true, provider: 'gmail', messageId: info.messageId };
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-      return result;
+      return { success: true, sentLive: true, provider: 'gmail', messageId: info.messageId };
     } catch (error) {
       console.error(`[Gmail SMTP Error] Failed delivering to ${to}:`, error.message);
-      const result = { success: false, sentLive: false, provider: 'gmail', error: error.message };
-      await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, ...result });
-      return result;
+      return { success: false, sentLive: false, provider: 'gmail', error: error.message };
     }
   }
 
   // 4. Fallback: Mock / Development Mode
   console.log(`[Email Mock] ${subject} generated for ${to}`);
-  await logEmailAttempt({ userId, recipientEmail: to, type: emailType, subject, provider: 'mock', sentLive: false, success: false, error: 'No provider configured' });
   return { success: true, sentLive: false, provider: 'mock' };
 };
 
@@ -307,8 +279,7 @@ export const sendDailyReminder = async ({ user, completedCount, totalActive, sle
   }
 
   const html = getEmailTemplate('Your Winter Arc Check-in', messageContent);
-  const result = await dispatchEmail({ to: user.email, subject, html, userId: user._id, emailType: 'daily_reminder' });
-
+  const result = await dispatchEmail({ to: user.email, subject, html });
 
   return {
     success: true,
@@ -349,7 +320,7 @@ export const sendWeeklySummary = async ({ user, stats }) => {
   `;
 
   const html = getEmailTemplate('Your Winter Arc — Weekly Review', messageContent);
-  return await dispatchEmail({ to: user.email, subject: '❄️ Your Winter Arc — Weekly Review', html, userId: user._id, emailType: 'weekly_summary' });
+  return await dispatchEmail({ to: user.email, subject: '❄️ Your Winter Arc — Weekly Review', html });
 };
 
 /**
@@ -374,7 +345,7 @@ export const sendMonthlySummary = async ({ user, stats }) => {
   `;
 
   const html = getEmailTemplate(`Monthly Summary — ${monthName}`, messageContent);
-  return await dispatchEmail({ to: user.email, subject: `❄️ Your Winter Arc — ${monthName} Summary`, html, userId: user._id, emailType: 'monthly_summary' });
+  return await dispatchEmail({ to: user.email, subject: `❄️ Your Winter Arc — ${monthName} Summary`, html });
 };
 
 /**
@@ -391,14 +362,5 @@ export const sendPasswordReset = async ({ user, resetUrl }) => {
   `;
 
   const html = getEmailTemplate('Reset Your Password', messageContent);
-  return await dispatchEmail({ to: user.email, subject: '🔒 Reset your Winter Arc password', html, userId: user._id, emailType: 'password_reset' });
-};
-
-
-/**
- * Explicit test email dispatcher (used by Settings -> Send Test Reminder)
- * Logs with emailType: 'test' so it does not pollute daily reminder stats.
- */
-export const dispatchTestEmail = async ({ user, html, subject }) => {
-  return await dispatchEmail({ to: user.email, subject, html, userId: user._id, emailType: 'test' });
+  return await dispatchEmail({ to: user.email, subject: '🔒 Reset your Winter Arc password', html });
 };

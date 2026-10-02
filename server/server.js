@@ -18,8 +18,6 @@ import goalRoutes from './routes/goalRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import insightsRoutes from './routes/insightsRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,7 +76,6 @@ const mountAppRoutes = (prefix = '') => {
   app.use(`${prefix}/dashboard`, dashboardRoutes);
   app.use(`${prefix}/insights`, insightsRoutes);
   app.use(`${prefix}/notifications`, notificationRoutes);
-  app.use(`${prefix}/admin`, adminRoutes);
 };
 
 // Mount both for universal compatibility
