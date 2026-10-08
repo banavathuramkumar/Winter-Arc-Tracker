@@ -30,7 +30,7 @@ export const getLocalDateString = (date = new Date(), timezone = 'UTC') => {
  * @returns {Promise<{ currentStreak: number, longestStreak: number, isTodayComplete: boolean, completedDates: string[] }>}
  */
 export const calculateUserStreaks = async (userId, timezone = 'UTC') => {
-  const activeHabits = await Habit.find({ userId, active: true, archived: false }).select('_id');
+  const activeHabits = await Habit.find({ userId, active: true, archived: false });
   const activeCount = activeHabits.length;
 
   if (activeCount === 0) {
@@ -41,8 +41,6 @@ export const calculateUserStreaks = async (userId, timezone = 'UTC') => {
       completedDates: [],
     };
   }
-
-  const activeHabitIds = activeHabits.map((h) => h._id.toString());
 
   // Aggregate all completed habit logs for this user
   const completedLogs = await HabitLog.find({
@@ -60,10 +58,16 @@ export const calculateUserStreaks = async (userId, timezone = 'UTC') => {
     dateMap[log.date].add(log.habitId.toString());
   }
 
-  // Find all dates where all active habits were completed
+  // Find all dates where all habits active ON THAT DATE were completed
+  // (Prevents new habits created mid-month from invalidating prior streak dates)
   const completeDates = [];
   for (const [dateStr, habitSet] of Object.entries(dateMap)) {
-    if (activeHabitIds.every((id) => habitSet.has(id))) {
+    const habitsExpected = activeHabits.filter((h) => {
+      const createdDate = getLocalDateString(new Date(h.createdAt), timezone);
+      return createdDate <= dateStr;
+    });
+
+    if (habitsExpected.length > 0 && habitsExpected.every((h) => habitSet.has(h._id.toString()))) {
       completeDates.push(dateStr);
     }
   }

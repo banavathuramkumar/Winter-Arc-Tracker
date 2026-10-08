@@ -61,14 +61,19 @@ export const getInsights = async (req, res, next) => {
     const timelineData = last30Days.map((dateStr) => {
       const [, m, d] = dateStr.split('-');
       const completedHabits = habitCountByDate[dateStr] || 0;
-      const completionRate = activeHabitCount > 0 ? Math.round((completedHabits / activeHabitCount) * 100) : 0;
+      const habitsOnDate = activeHabits.filter((h) => {
+        const createdDate = getLocalDateString(new Date(h.createdAt), timezone);
+        return createdDate <= dateStr;
+      }).length;
+      const totalHabits = habitsOnDate > 0 ? habitsOnDate : activeHabitCount;
+      const completionRate = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 0;
       const sleepHours = sleepByDate[dateStr] !== undefined ? sleepByDate[dateStr] : null;
 
       return {
         date: dateStr,
         displayDate: `${m}/${d}`,
         completedHabits,
-        totalHabits: activeHabitCount,
+        totalHabits,
         completionRate,
         sleepHours,
         sleepGoal,
