@@ -23,8 +23,8 @@ export const BottomNav = () => {
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[10px] font-medium transition-colors ${
                   isActive
-                    ? 'text-sky-500 dark:text-sky-400 font-semibold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    ? 'text-sky-600 dark:text-sky-400 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`
               }
             >

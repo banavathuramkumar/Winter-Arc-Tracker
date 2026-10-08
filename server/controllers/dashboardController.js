@@ -107,6 +107,26 @@ export const getDashboardOverview = async (req, res, next) => {
       habitLogsByDate[log.date]++;
     }
 
+    // Build a map: date -> earliest habit that existed on that date
+    // So days before all habits existed won't show as "empty/missed"
+    const habitCreationDates = activeHabits.map((h) => {
+      const createdStr = getLocalDateString(new Date(h.createdAt), timezone);
+      return createdStr;
+    });
+    // Earliest date any habit existed this month (or month start if all habits predate this month)
+    const habitDatesThisMonth = habitCreationDates.filter((d) => d.substring(0, 7) === currentMonthStr);
+    const earliestHabitDateInMonth = habitDatesThisMonth.length > 0
+      ? habitDatesThisMonth.sort()[0]
+      : `${currentMonthStr}-01`;
+
+    // For each date, compute how many habits existed (were already created)
+    const getActiveHabitCountForDate = (dateKey) => {
+      return activeHabits.filter((h) => {
+        const createdStr = getLocalDateString(new Date(h.createdAt), timezone);
+        return createdStr <= dateKey;
+      }).length;
+    };
+
     const calendarDays = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dayPad = String(d).padStart(2, '0');
@@ -117,10 +137,16 @@ export const getDashboardOverview = async (req, res, next) => {
       const habitsCompleted = habitLogsByDate[dateKey] || 0;
       const sleepDuration = sleepMap[dateKey] !== undefined ? sleepMap[dateKey] : null;
 
-      let status = 'empty'; // 'perfect', 'partial', 'empty', 'future'
+      // How many habits existed on this date
+      const habitsActiveOnDate = getActiveHabitCountForDate(dateKey);
+
+      let status = 'empty';
       if (isFuture) {
         status = 'future';
-      } else if (totalActive > 0 && habitsCompleted >= totalActive && sleepDuration !== null && sleepDuration > 0) {
+      } else if (habitsActiveOnDate === 0) {
+        // No habits existed yet on this day — don't penalise, show as future-like
+        status = 'future';
+      } else if (habitsCompleted >= habitsActiveOnDate && sleepDuration !== null && sleepDuration > 0) {
         status = 'perfect';
       } else if (habitsCompleted > 0 || (sleepDuration !== null && sleepDuration > 0)) {
         status = 'partial';
@@ -133,10 +159,26 @@ export const getDashboardOverview = async (req, res, next) => {
         isFuture,
         status,
         habitsCompleted,
-        totalHabits: totalActive,
+        totalHabits: habitsActiveOnDate,
         sleepDuration,
       });
     }
+
+    // 8. Calculate Today's Daily Score (0-100)
+    // Habit portion (0-60): completed habits / active habits today
+    const habitDailyPct = totalActive > 0 ? Math.round((completedCount / totalActive) * 100) : 0;
+    const habitDailyScore = Math.round((habitDailyPct / 100) * 60);
+    // Sleep portion (0-30): did they log sleep >= 85% of goal?
+    const sleepDailyScore = todaySleep
+      ? todaySleep.duration >= sleepGoal * 0.85
+        ? 30
+        : Math.round((todaySleep.duration / sleepGoal) * 30)
+      : 0;
+    // Goal portion (0-10): any active goals with progress?
+    const goalsWithProgress = currentGoals.filter((g) => g.progress > 0 || g.completed);
+    const goalDailyScore = currentGoals.length > 0 ? Math.round((goalsWithProgress.length / currentGoals.length) * 10) : 0;
+    const dailyScore = Math.min(100, habitDailyScore + sleepDailyScore + goalDailyScore);
+
 
     res.status(200).json({
       success: true,
@@ -178,9 +220,21 @@ export const getDashboardOverview = async (req, res, next) => {
         breakdown: scoreData.breakdown,
         isPerfectDay: scoreData.isTodayPerfect,
       },
+      dailyScore: {
+        total: dailyScore,
+        habitScore: habitDailyScore,
+        sleepScore: sleepDailyScore,
+        goalScore: goalDailyScore,
+        breakdown: {
+          habits: `${completedCount}/${totalActive} habits (${habitDailyPct}%)`,
+          sleep: todaySleep ? `${todaySleep.duration}h logged` : 'Not logged',
+          goals: `${goalsWithProgress.length}/${currentGoals.length} goals active`,
+        },
+      },
       goals: currentGoals,
       calendarDays,
     });
+
   } catch (error) {
     next(error);
   }

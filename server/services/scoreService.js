@@ -28,18 +28,36 @@ export const calculateWinterArcScore = async (userId, sleepGoal = 8, timezone = 
   let habitStats = { totalExpected: 0, completedCount: 0, percentage: 0 };
 
   if (activeHabitCount > 0) {
-    // Current day number in the month (e.g. up to today if current month, or full month if past)
     const [year, month] = currentMonth.split('-').map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    
+
     // If evaluating current month, only evaluate days elapsed so far
-    let daysToEvaluate = daysInMonth;
-    if (currentMonth === todayStr.substring(0, 7)) {
-      daysToEvaluate = parseInt(todayStr.split('-')[2], 10);
+    const isCurrentMonth = currentMonth === todayStr.substring(0, 7);
+    const todayDayNum = parseInt(todayStr.split('-')[2], 10);
+
+    // For each habit, calculate expected days from MAX(habit.createdAt date, month start) to today
+    // This prevents new habits from showing as "missing" for days before they existed
+    let totalExpected = 0;
+    for (const habit of activeHabits) {
+      // Get the day the habit was created (within this timezone context, use UTC date as approximation)
+      const habitCreatedStr = getLocalDateString(new Date(habit.createdAt), timezone);
+      const habitCreatedMonth = habitCreatedStr.substring(0, 7);
+
+      let startDayNum = 1; // default: start of month
+      if (habitCreatedMonth === currentMonth) {
+        // Habit was created this month — only count from creation day
+        startDayNum = parseInt(habitCreatedStr.split('-')[2], 10);
+      } else if (habitCreatedMonth > currentMonth) {
+        // Habit created after the target month — skip (0 expected days)
+        startDayNum = null;
+      }
+
+      if (startDayNum !== null) {
+        const endDayNum = isCurrentMonth ? todayDayNum : new Date(year, month, 0).getDate();
+        const daysForHabit = Math.max(0, endDayNum - startDayNum + 1);
+        totalExpected += daysForHabit;
+      }
     }
 
-    const totalExpected = activeHabitCount * daysToEvaluate;
-    
     // Count completed logs for this month up to today
     const habitLogs = await HabitLog.find({
       userId,
@@ -53,6 +71,7 @@ export const calculateWinterArcScore = async (userId, sleepGoal = 8, timezone = 
     habitScore = (habitPct / 100) * 50; // max 50 points
     habitStats = { totalExpected, completedCount, percentage: habitPct };
   }
+
 
   // 2. Sleep Consistency (0 - 25 pts)
   const sleepLogs = await SleepLog.find({

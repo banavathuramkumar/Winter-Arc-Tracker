@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Snowflake, Moon, Sun, Flame, LogOut, Settings, User } from 'lucide-react';
+import { Snowflake, Moon, Sun, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-export const Navbar = ({ streakCount = 0 }) => {
+export const Navbar = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,14 +48,6 @@ export const Navbar = ({ streakCount = 0 }) => {
 
         {/* Right Controls */}
         <div className="flex items-center space-x-3 sm:space-x-4">
-          
-          {/* Quick Streak Pill */}
-          {user && (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold">
-              <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
-              <span>{streakCount} {streakCount === 1 ? 'day' : 'days'}</span>
-            </div>
-          )}
 
           {/* Dark / Light Mode Toggle */}
           <button
